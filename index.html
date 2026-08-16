@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>Manager Bandwidth Tracker</title>
+<style>
+:root{
+  --bg:#f4f6f8;--card:#fff;--text:#17202a;--muted:#6b7280;--line:#d9dee5;
+  --green:#4caf50;--yellow:#f4c542;--red:#e74c3c;--blue:#2f6fed;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--text)}
+.wrap{max-width:720px;margin:auto;padding:14px 14px 90px}
+h1{font-size:24px;margin:8px 0 2px}.sub{color:var(--muted);font-size:13px;margin-bottom:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;margin:12px 0;box-shadow:0 1px 3px #0000000d}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.stat{background:#f8fafc;border-radius:12px;padding:12px}.stat b{display:block;font-size:22px}.stat span{font-size:12px;color:var(--muted)}
+button{border:0;border-radius:14px;padding:14px 12px;font-weight:700;font-size:16px;width:100%;cursor:pointer}
+.primary{background:var(--blue);color:#fff}.secondary{background:#eef2f7;color:#1f2937}.danger{background:#fde8e6;color:#9b1c1c}
+.row{display:flex;gap:8px}.row>*{flex:1}
+label{display:block;font-size:12px;font-weight:700;color:#4b5563;margin:10px 0 5px}
+input,select,textarea{width:100%;padding:12px;border:1px solid var(--line);border-radius:12px;background:#fff;font-size:16px}
+textarea{min-height:64px;resize:vertical}
+.segment{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}.segment.three{grid-template-columns:repeat(3,1fr)}
+.choice{padding:12px;border:1px solid var(--line);border-radius:12px;text-align:center;background:#fff;font-weight:700}
+.choice.active{outline:3px solid #bfd0ff;border-color:var(--blue)}
+.hidden{display:none!important}
+.entry{border-top:1px solid var(--line);padding:10px 0;font-size:13px}.entry:first-child{border-top:0}
+.badge{display:inline-block;padding:3px 7px;border-radius:999px;background:#eef2f7;font-size:11px;margin-right:4px}
+.nav{position:fixed;bottom:0;left:0;right:0;background:#ffffffee;border-top:1px solid var(--line);backdrop-filter:blur(10px)}
+.navin{max-width:720px;margin:auto;display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:8px 10px calc(8px + env(safe-area-inset-bottom))}
+.nav button{font-size:12px;padding:9px 4px;background:transparent;color:#4b5563}.nav button.active{color:var(--blue)}
+.bar{height:12px;background:#e5e7eb;border-radius:999px;overflow:hidden;margin:5px 0 10px}.bar>div{height:100%;background:var(--blue)}
+.pareto-row{margin:9px 0}
+.small{font-size:12px;color:var(--muted)}
+.warning{background:#fff7ed;border-color:#fed7aa}
+footer{font-size:11px;color:var(--muted);text-align:center;margin-top:14px}
+</style>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#2f6fed">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-title" content="Bandwidth">
+</head>
+<body>
+<div class="wrap">
+  <section id="screen-today">
+    <h1>Manager Bandwidth</h1>
+    <div class="sub" id="todayLabel"></div>
+
+    <div class="card">
+      <div class="grid">
+        <div class="stat"><b id="sInterruptions">0</b><span>Interruptions</span></div>
+        <div class="stat"><b id="sMinutes">0</b><span>Minutes consumed</span></div>
+        <div class="stat"><b id="sEscalations">0</b><span>Escalations</span></div>
+        <div class="stat"><b id="sRedirects">0</b><span>Redirected / delegated</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <button class="primary" onclick="openLog('interruption')">+ Log Interruption</button>
+      <div class="row" style="margin-top:10px">
+        <button class="secondary" onclick="openLog('breakdown')">+ Breakdown</button>
+        <button class="secondary" onclick="openLog('meeting')">+ Added Meeting</button>
+      </div>
+    </div>
+
+    <div class="card warning">
+      <b>10-second filter</b>
+      <div class="small" style="margin-top:5px">What do you need from me: <b>Decision</b>, <b>Help thinking</b>, or <b>FYI</b>? Then ask: who owns it, what have they tried, and does it really require my level?</div>
+    </div>
+
+    <div class="card">
+      <b>Today’s log</b>
+      <div id="todayEntries" class="small" style="margin-top:8px">No entries yet.</div>
+    </div>
+  </section>
+
+  <section id="screen-log" class="hidden">
+    <h1 id="logTitle">Log Interruption</h1>
+    <div class="card">
+      <input type="hidden" id="logKind" value="interruption">
+      <label>Time</label>
+      <input id="time" type="time">
+
+      <div id="interruptionFields">
+        <label>Initials / source</label>
+        <input id="initials" maxlength="8" placeholder="e.g., AB">
+
+        <label>Type</label>
+        <div class="segment">
+          <div class="choice" data-type="Escalation" onclick="pickType(this)">Escalation</div>
+          <div class="choice" data-type="10-second" onclick="pickType(this)">10-second</div>
+        </div>
+
+        <div id="tenFields" class="hidden">
+          <label>10-second category</label>
+          <div class="segment three">
+            <div class="choice" data-ten="Decision" onclick="pickTen(this)">Decision</div>
+            <div class="choice" data-ten="Help thinking" onclick="pickTen(this)">Help thinking</div>
+            <div class="choice" data-ten="FYI" onclick="pickTen(this)">FYI</div>
+          </div>
+        </div>
+
+        <label>Should this have reached me?</label>
+        <select id="shouldReach">
+          <option value="">Choose…</option>
+          <option>Yes</option><option>No</option><option>Unsure</option>
+        </select>
+
+        <label>How did I resolve it?</label>
+        <select id="resolution">
+          <option value="">Choose…</option>
+          <option>Resolved</option>
+          <option>Redirected</option>
+          <option>Delegated</option>
+          <option>Scheduled later</option>
+          <option>Coached / asked recommendation</option>
+          <option>Took ownership</option>
+        </select>
+      </div>
+
+      <div id="eventFields" class="hidden">
+        <label>Short description</label>
+        <input id="eventDesc" placeholder="Generic only — no sensitive details">
+      </div>
+
+      <label>Minutes consumed</label>
+      <input id="minutes" type="number" min="0" step="1" inputmode="numeric" placeholder="e.g., 8">
+
+      <label>Few words (optional)</label>
+      <textarea id="notes" placeholder="Keep generic: process/support/people/admin, etc."></textarea>
+
+      <div class="row" style="margin-top:12px">
+        <button class="secondary" onclick="showScreen('today')">Cancel</button>
+        <button class="primary" onclick="saveLog()">Save</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="screen-week">
+    <h1>Weekly Review</h1>
+    <div class="sub">Use this to find what should be eliminated, delegated, standardized, or redirected.</div>
+    <div class="card">
+      <div class="grid">
+        <div class="stat"><b id="wCount">0</b><span>Total interruptions</span></div>
+        <div class="stat"><b id="wMin">0</b><span>Interruption minutes</span></div>
+        <div class="stat"><b id="wNo">0%</b><span>Shouldn’t reach me</span></div>
+        <div class="stat"><b id="wMeet">0</b><span>Added meeting min</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <b>Top interruption sources</b>
+      <div id="pareto" class="small" style="margin-top:10px">No data yet.</div>
+    </div>
+    <div class="card">
+      <b>Resolution pattern</b>
+      <div id="resolutionStats" class="small" style="margin-top:10px">No data yet.</div>
+    </div>
+  </section>
+
+  <section id="screen-data">
+    <h1>Data</h1>
+    <div class="card">
+      <p class="small">All entries are stored only in this browser on this device. Export regularly if you want a backup.</p>
+      <div class="row">
+        <button class="secondary" onclick="exportCSV()">Export CSV</button>
+        <button class="danger" onclick="clearData()">Delete All</button>
+      </div>
+    </div>
+    <div class="card warning">
+      <b>Privacy rule</b>
+      <p class="small">Track your workload, not company information. Use initials or generic sources only. Avoid names, VINs, proprietary production data, detailed quality issues, employee medical/HR details, or other confidential information.</p>
+    </div>
+  </section>
+</div>
+
+<div class="nav">
+  <div class="navin">
+    <button id="nav-today" class="active" onclick="showScreen('today')">Today</button>
+    <button id="nav-log" onclick="openLog('interruption')">Log</button>
+    <button id="nav-week" onclick="showScreen('week')">Week</button>
+    <button id="nav-data" onclick="showScreen('data')">Data</button>
+  </div>
+</div>
+
+<script>
+const KEY='managerBandwidthEntries_v1';
+let selectedType='', selectedTen='';
+
+function entries(){ try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch(e){return[]} }
+function put(a){ localStorage.setItem(KEY, JSON.stringify(a)); }
+function localDate(d=new Date()){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function nowTime(){let d=new Date();return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')}
+function showScreen(name){
+  ['today','log','week','data'].forEach(x=>document.getElementById('screen-'+x).classList.toggle('hidden',x!==name));
+  document.querySelectorAll('.nav button').forEach(b=>b.classList.remove('active'));
+  const n=document.getElementById('nav-'+name); if(n)n.classList.add('active');
+  if(name==='today')renderToday(); if(name==='week')renderWeek();
+}
+function openLog(kind){
+  selectedType=''; selectedTen='';
+  document.querySelectorAll('.choice').forEach(x=>x.classList.remove('active'));
+  document.getElementById('logKind').value=kind;
+  document.getElementById('time').value=nowTime();
+  document.getElementById('initials').value='';
+  document.getElementById('shouldReach').value='';
+  document.getElementById('resolution').value='';
+  document.getElementById('eventDesc').value='';
+  document.getElementById('minutes').value='';
+  document.getElementById('notes').value='';
+  document.getElementById('tenFields').classList.add('hidden');
+  const inter=kind==='interruption';
+  document.getElementById('interruptionFields').classList.toggle('hidden',!inter);
+  document.getElementById('eventFields').classList.toggle('hidden',inter);
+  document.getElementById('logTitle').textContent= inter?'Log Interruption':kind==='breakdown'?'Log Breakdown / Abnormal':'Log Added Meeting';
+  showScreen('log');
+}
+function pickType(el){
+  document.querySelectorAll('[data-type]').forEach(x=>x.classList.remove('active')); el.classList.add('active');
+  selectedType=el.dataset.type;
+  document.getElementById('tenFields').classList.toggle('hidden',selectedType!=='10-second');
+}
+function pickTen(el){
+  document.querySelectorAll('[data-ten]').forEach(x=>x.classList.remove('active')); el.classList.add('active'); selectedTen=el.dataset.ten;
+}
+function saveLog(){
+  const kind=document.getElementById('logKind').value;
+  const e={id:Date.now(),date:localDate(),time:document.getElementById('time').value||nowTime(),kind,
+    minutes:Number(document.getElementById('minutes').value||0),notes:document.getElementById('notes').value.trim()};
+  if(kind==='interruption'){
+    e.initials=document.getElementById('initials').value.trim().toUpperCase();
+    e.type=selectedType; e.ten=selectedTen;
+    e.shouldReach=document.getElementById('shouldReach').value;
+    e.resolution=document.getElementById('resolution').value;
+  } else e.description=document.getElementById('eventDesc').value.trim();
+  const a=entries(); a.push(e); put(a); showScreen('today');
+}
+function renderToday(){
+  const d=new Date(); document.getElementById('todayLabel').textContent=d.toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'});
+  const a=entries().filter(e=>e.date===localDate());
+  const ints=a.filter(e=>e.kind==='interruption');
+  document.getElementById('sInterruptions').textContent=ints.length;
+  document.getElementById('sMinutes').textContent=ints.reduce((s,e)=>s+e.minutes,0);
+  document.getElementById('sEscalations').textContent=ints.filter(e=>e.type==='Escalation').length;
+  document.getElementById('sRedirects').textContent=ints.filter(e=>['Redirected','Delegated','Scheduled later'].includes(e.resolution)).length;
+  const box=document.getElementById('todayEntries');
+  if(!a.length){box.innerHTML='No entries yet.';return}
+  box.innerHTML=a.slice().reverse().map(e=>{
+    let title=e.kind==='interruption'?(e.initials||'—')+' · '+(e.type||'Interruption')+(e.ten?' · '+e.ten:''):(e.kind==='breakdown'?'Breakdown':'Added meeting');
+    let sub=e.kind==='interruption'?(e.resolution||'No resolution selected')+(e.shouldReach?' · Reach me: '+e.shouldReach:''):(e.description||'');
+    return `<div class="entry"><b>${e.time} · ${title}</b> <span class="badge">${e.minutes} min</span><br>${escapeHtml(sub)}${e.notes?'<br><span class="small">'+escapeHtml(e.notes)+'</span>':''}</div>`
+  }).join('');
+}
+function weekStart(){
+  let d=new Date(); let day=d.getDay(); let diff=(day===0?-6:1-day); d.setDate(d.getDate()+diff); d.setHours(0,0,0,0); return d;
+}
+function renderWeek(){
+  const ws=weekStart(), we=new Date(ws); we.setDate(ws.getDate()+7);
+  const a=entries().filter(e=>{let d=new Date(e.date+'T12:00:00'); return d>=ws&&d<we});
+  const ints=a.filter(e=>e.kind==='interruption');
+  const mins=ints.reduce((s,e)=>s+e.minutes,0);
+  const no=ints.filter(e=>e.shouldReach==='No').length;
+  document.getElementById('wCount').textContent=ints.length;
+  document.getElementById('wMin').textContent=mins;
+  document.getElementById('wNo').textContent=ints.length?Math.round(no/ints.length*100)+'%':'0%';
+  document.getElementById('wMeet').textContent=a.filter(e=>e.kind==='meeting').reduce((s,e)=>s+e.minutes,0);
+  const by={}; ints.forEach(e=>{let k=e.initials||'Unknown';by[k]=(by[k]||0)+e.minutes});
+  const sorted=Object.entries(by).sort((a,b)=>b[1]-a[1]); const max=sorted[0]?.[1]||1;
+  document.getElementById('pareto').innerHTML=sorted.length?sorted.map(([k,v])=>`<div class="pareto-row"><b>${escapeHtml(k)}</b> — ${v} min<div class="bar"><div style="width:${v/max*100}%"></div></div></div>`).join(''):'No data yet.';
+  const rr={}; ints.forEach(e=>{let k=e.resolution||'Unspecified';rr[k]=(rr[k]||0)+1});
+  document.getElementById('resolutionStats').innerHTML=Object.entries(rr).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div>${escapeHtml(k)}: <b>${v}</b></div>`).join('')||'No data yet.';
+}
+function exportCSV(){
+  const a=entries(); const cols=['date','time','kind','initials','type','ten','shouldReach','resolution','description','minutes','notes'];
+  const csv=[cols.join(',')].concat(a.map(e=>cols.map(c=>`"${String(e[c]??'').replaceAll('"','""')}"`).join(','))).join('\n');
+  const blob=new Blob([csv],{type:'text/csv'}); const url=URL.createObjectURL(blob); const x=document.createElement('a'); x.href=url; x.download='manager-bandwidth-data.csv'; x.click(); URL.revokeObjectURL(url);
+}
+function clearData(){ if(confirm('Delete all locally stored tracker data?')){localStorage.removeItem(KEY);renderToday();renderWeek()} }
+function escapeHtml(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
+renderToday();
+</script>
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("./service-worker.js"));
+}
+</script>
+</body>
+</html>
